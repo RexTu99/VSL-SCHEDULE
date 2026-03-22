@@ -1458,13 +1458,13 @@ function renderTable(data) {
 }
 
 function formatDate(d) {
-  const s = String(d);
+  const s = String(d).replace(/\.0$/, '').trim();
   if (s.length !== 8) return s;
   return s.substring(0, 4) + '/' + s.substring(4, 6) + '/' + s.substring(6, 8);
 }
 
 function getWeekday(d) {
-  const s = String(d);
+  const s = String(d).replace(/\.0$/, '').trim();
   if (s.length !== 8) return '';
   const date = new Date(+s.substring(0, 4), +s.substring(4, 6) - 1, +s.substring(6, 8));
   return ['日', '一', '二', '三', '四', '五', '六'][date.getDay()];
