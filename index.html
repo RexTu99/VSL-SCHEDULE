@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>船期查詢系統 (手機版)</title>
+<title>船期與備品轉運查詢 (手機版)</title>
 <!-- xlsx library not needed for built-in data version -->
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -95,6 +95,33 @@ body {
 .btn-multi:hover { background: linear-gradient(135deg, #047857, #065f46); }
 .btn-mtype     { background: linear-gradient(135deg, #9333ea, #7e22ce); }
 .btn-mtype:hover { background: linear-gradient(135deg, #7e22ce, #6b21a8); }
+.btn-transfer  { background: linear-gradient(135deg, #0d9488, #0f766e); color: #fff; }
+.btn-transfer:hover { background: linear-gradient(135deg, #0f766e, #115e59); }
+
+/* Transfer result cards */
+.transfer-target-info {
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border-radius: 10px; padding: 14px 12px; margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #99f6e4;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.transfer-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: 800; color: #fff;
+}
+.transfer-rank.rank-1 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.transfer-rank.rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); }
+.transfer-rank.rank-3 { background: linear-gradient(135deg, #b45309, #92400e); }
+.transfer-rank.rank-other { background: #cbd5e1; color: #475569; }
+.transfer-days {
+  display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
+}
+.transfer-days.good { background: #dcfce7; color: #166534; }
+.transfer-days.ok { background: #fef3c7; color: #92400e; }
+.transfer-days.late { background: #fef2f2; color: #991b1b; }
+.transfer-best-tag {
+  display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; background: #0d9488; color: #fff; letter-spacing: 0.3px;
+}
 
 /* ===== Suggestion Dropdown ===== */
 .search-wrapper { position: relative; }
@@ -249,7 +276,7 @@ tr.vsl-row-9  { border-left: 4px solid #64748b; }
 <div class="header">
   <svg viewBox="0 0 36 36" fill="none"><path d="M4 26c2-3 6-5 10-5s7 1 10 4c3 3 6 3 8 2" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M6 20l2-10h20l2 10" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="12" y="12" width="4" height="5" rx="0.5" stroke="#fff" stroke-width="1.5"/><rect x="20" y="12" width="4" height="5" rx="0.5" stroke="#fff" stroke-width="1.5"/><line x1="18" y1="6" x2="18" y2="10" stroke="#fff" stroke-width="1.5"/><polygon points="18,4 22,10 18,10" fill="#fff" opacity="0.6"/></svg>
   <div>
-    <h1>船期查詢系統</h1>
+    <h1>船期與備品轉運查詢</h1>
     <div class="subtitle">VSL Schedule Query - 輸入船名即可查詢航修日期</div>
       <div class="subtitle" id="updateDateLabel" style="opacity:0.6;font-size:10px"></div>
   </div>
@@ -779,6 +806,89 @@ tr.vsl-row-9  { border-left: 4px solid #64748b; }
     </div>
   </div>
 
+  <!-- Transfer Vessel Search -->
+  <div class="search-section">
+    <h2 style="margin-bottom:12px">8. 備品轉運船查詢</h2>
+    <p style="font-size:11px;color:#64748b;margin-bottom:10px">輸入起始碼頭、終點碼頭與目標船，系統將自動找出最適合的轉運船</p>
+    <div class="search-row">
+      <div class="search-group">
+        <label>備品轉運起始碼頭</label>
+        <select class="search-input" id="transferStartPort" disabled>
+          <option value="">-- 請選擇起始碼頭 --</option>
+        </select>
+      </div>
+      <div class="search-group">
+        <label>備品轉運終點碼頭</label>
+        <select class="search-input" id="transferEndPort" disabled>
+          <option value="">-- 請選擇終點碼頭 --</option>
+        </select>
+      </div>
+      <div class="search-group">
+        <label>目標船</label>
+        <div class="search-wrapper">
+          <input type="text" class="search-input" id="transferVesselInput" placeholder="輸入目標船名..." autocomplete="off" disabled>
+          <div class="suggestions" id="transferSuggestions"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-transfer" id="transferSearchBtn" disabled onclick="doTransferSearch()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
+        查詢轉運船
+      </button>
+      <button class="btn btn-secondary" onclick="clearTransferSearch()">清除</button>
+    </div>
+  </div>
+
+  <!-- Transfer Vessel Results -->
+  <div class="results-section hidden" id="transferResultsSection">
+    <div class="result-header">
+      <h2 id="transferResultTitle"></h2>
+      <span class="result-meta" id="transferResultMeta"></span>
+    </div>
+
+    <div class="transfer-target-info" id="transferTargetInfo"></div>
+
+    <div class="stats-bar" id="transferStatsBar"></div>
+
+    <div class="filter-row">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label>排序：</label>
+        <select class="filter-select" id="transferSortOrder" onchange="applyTransferFilter()">
+          <option value="match">最佳匹配優先</option>
+          <option value="early">取件日由早到晚</option>
+          <option value="short">轉運天數最短</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label>僅顯示：</label>
+        <select class="filter-select" id="transferTimingFilter" onchange="applyTransferFilter()">
+          <option value="">全部</option>
+          <option value="ontime">準時或提前到達</option>
+          <option value="late">遲到</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-container" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">排名</th>
+            <th>轉運船代碼</th>
+            <th>英文短名</th>
+            <th>中文船名</th>
+            <th>航線</th>
+            <th id="transferThStart">起始碼頭到港日</th>
+            <th id="transferThEnd">終點碼頭到港日</th>
+            <th id="transferThTarget">目標船到港日</th>
+            <th>提前/遲到</th>
+            <th>轉運天數</th>
+          </tr>
+        </thead>
+        <tbody id="transferTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Results -->
   <div class="results-section hidden" id="resultsSection">
     <div class="result-header">
@@ -996,6 +1106,10 @@ function activateUI() {
   document.getElementById('mtSearchInput').disabled = false;
   document.getElementById('mtSearchBtn').disabled = false;
   document.getElementById('mtChipsContainer').classList.remove('disabled');
+  document.getElementById('transferStartPort').disabled = false;
+  document.getElementById('transferEndPort').disabled = false;
+  document.getElementById('transferVesselInput').disabled = false;
+  document.getElementById('transferSearchBtn').disabled = false;
 
   // Populate VSL_TYPE dropdown
   const types = [...new Set(scheduleData.map(r => r.vslType))].filter(Boolean).sort();
@@ -1034,6 +1148,16 @@ function activateUI() {
       const cnt = new Set(scheduleData.filter(r => r.line === l).map(r => r.vessel)).size;
       return `<option value="${l}">${l} (${cnt} 艘)</option>`;
     }).join('');
+
+  // Populate Transfer port dropdowns
+  const transferPortOptions = '<optgroup label="航修碼頭">' +
+    allPorts.filter(p => isRepairPort(p) && !isDockRepairPort(p)).map(p => `<option value="${p}">${p}</option>`).join('') + '</optgroup>' +
+    '<optgroup label="塢修碼頭">' +
+    allPorts.filter(p => isDockRepairPort(p)).map(p => `<option value="${p}">${p}</option>`).join('') + '</optgroup>' +
+    '<optgroup label="一般港口">' +
+    allPorts.filter(p => !isRepairPort(p)).map(p => `<option value="${p}">${p}</option>`).join('') + '</optgroup>';
+  document.getElementById('transferStartPort').innerHTML = '<option value="">-- 請選擇起始碼頭 --</option>' + transferPortOptions;
+  document.getElementById('transferEndPort').innerHTML = '<option value="">-- 請選擇終點碼頭 --</option>' + transferPortOptions;
 
   document.getElementById('noData').classList.add('hidden');
 }
@@ -1507,6 +1631,7 @@ function hideAllResults() {
   document.getElementById('dockResultsSection').classList.add('hidden');
   document.getElementById('multiResultsSection').classList.add('hidden');
   document.getElementById('mtResultsSection').classList.add('hidden');
+  document.getElementById('transferResultsSection').classList.add('hidden');
   document.getElementById('noData').classList.add('hidden');
 }
 
@@ -2489,6 +2614,319 @@ function exportMtCSV() {
   a.href = URL.createObjectURL(blob);
   const names = mtSelectedTypes.map(t => t.type).join('_');
   a.download = `多船型查詢_${names}_船期.csv`;
+  a.click();
+}
+
+// ===== Transfer Vessel Search =====
+let transferAllRoutes = [];
+let transferCurrentRoutes = [];
+let transferTargetVesselCode = '';
+
+const transferVesselInput = document.getElementById('transferVesselInput');
+const transferSuggestionsEl = document.getElementById('transferSuggestions');
+
+transferVesselInput.addEventListener('input', () => {
+  const q = transferVesselInput.value.trim().toUpperCase();
+  if (q.length === 0) { transferSuggestionsEl.classList.remove('show'); return; }
+
+  const vessels = getUniqueVessels();
+  const matches = [];
+  const seen = new Set();
+
+  Object.values(vessels).forEach(r => {
+    const code = r.vessel.toUpperCase();
+    const ename = r.eName.toUpperCase();
+    const cname = r.cName;
+    if (code.includes(q) || ename.includes(q) || cname.includes(q)) {
+      if (!seen.has(r.vessel)) {
+        seen.add(r.vessel);
+        matches.push(r);
+      }
+    }
+  });
+
+  if (matches.length === 0) { transferSuggestionsEl.classList.remove('show'); return; }
+
+  transferSuggestionsEl.innerHTML = matches.slice(0, 15).map(r =>
+    `<div class="suggestion-item" data-vessel="${r.vessel}" onclick="selectTransferVessel('${r.vessel}')">
+      <span>${r.eName} (${r.cName})</span>
+      <span class="vsl-code">${r.vessel} | ${r.line}</span>
+    </div>`
+  ).join('');
+  transferSuggestionsEl.classList.add('show');
+});
+
+transferVesselInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { transferSuggestionsEl.classList.remove('show'); doTransferSearch(); }
+  if (e.key === 'Escape') transferSuggestionsEl.classList.remove('show');
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#transferVesselInput') && !e.target.closest('#transferSuggestions'))
+    transferSuggestionsEl.classList.remove('show');
+});
+
+function selectTransferVessel(vessel) {
+  const r = scheduleData.find(d => d.vessel === vessel);
+  if (r) transferVesselInput.value = r.eName;
+  transferTargetVesselCode = vessel;
+  transferSuggestionsEl.classList.remove('show');
+}
+
+function parseDateStr(d) {
+  const s = String(d).replace(/\.0$/, '').trim();
+  if (s.length !== 8) return null;
+  return new Date(+s.substring(0, 4), +s.substring(4, 6) - 1, +s.substring(6, 8));
+}
+
+function daysDiff(d1, d2) {
+  const ms = d2.getTime() - d1.getTime();
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function doTransferSearch() {
+  const startPort = document.getElementById('transferStartPort').value;
+  const endPort = document.getElementById('transferEndPort').value;
+  const vesselQ = transferVesselInput.value.trim().toUpperCase();
+
+  if (!startPort || !endPort || !vesselQ) {
+    alert('請填寫所有欄位：起始碼頭、終點碼頭、目標船');
+    return;
+  }
+  if (startPort === endPort) {
+    alert('起始碼頭與終點碼頭不可相同');
+    return;
+  }
+
+  let targetCode = transferTargetVesselCode;
+  if (!targetCode || !vesselQ.includes(transferVesselInput.value.trim().toUpperCase().substring(0, 2))) {
+    targetCode = vesselIndex[vesselQ];
+    if (!targetCode) {
+      const keys = Object.keys(vesselIndex);
+      const match = keys.find(k => k.includes(vesselQ));
+      if (match) targetCode = vesselIndex[match];
+    }
+    if (!targetCode) {
+      const match = scheduleData.find(r =>
+        r.vessel.toUpperCase().includes(vesselQ) ||
+        r.eName.toUpperCase().includes(vesselQ) ||
+        r.cName.includes(transferVesselInput.value.trim())
+      );
+      if (match) targetCode = match.vessel;
+    }
+  }
+
+  if (!targetCode) {
+    hideAllResults();
+    document.getElementById('noData').classList.remove('hidden');
+    document.getElementById('noDataMsg').textContent = `找不到目標船「${transferVesselInput.value.trim()}」`;
+    return;
+  }
+
+  const targetAtEndPort = scheduleData.filter(r => r.vessel === targetCode && r.port === endPort);
+  if (targetAtEndPort.length === 0) {
+    hideAllResults();
+    document.getElementById('noData').classList.remove('hidden');
+    const info = scheduleData.find(r => r.vessel === targetCode);
+    const name = info ? info.eName : targetCode;
+    document.getElementById('noDataMsg').textContent = `目標船「${name}」未停靠終點碼頭「${endPort}」，無法進行轉運查詢`;
+    return;
+  }
+
+  const targetInfo = scheduleData.find(r => r.vessel === targetCode);
+  const targetEndDates = targetAtEndPort.map(r => ({
+    date: parseDateStr(r.arrivalDate),
+    dateStr: r.arrivalDate
+  })).filter(d => d.date).sort((a, b) => a.date - b.date);
+
+  const otherVessels = [...new Set(scheduleData.filter(r => r.vessel !== targetCode).map(r => r.vessel))];
+
+  transferAllRoutes = [];
+
+  otherVessels.forEach(vCode => {
+    const vRecords = scheduleData.filter(r => r.vessel === vCode);
+    const vInfo = vRecords[0];
+
+    const atStart = vRecords.filter(r => r.port === startPort)
+      .map(r => ({ date: parseDateStr(r.arrivalDate), dateStr: r.arrivalDate }))
+      .filter(d => d.date).sort((a, b) => a.date - b.date);
+
+    const atEnd = vRecords.filter(r => r.port === endPort)
+      .map(r => ({ date: parseDateStr(r.arrivalDate), dateStr: r.arrivalDate }))
+      .filter(d => d.date).sort((a, b) => a.date - b.date);
+
+    if (atStart.length === 0 || atEnd.length === 0) return;
+
+    atStart.forEach(startVisit => {
+      const nextEnd = atEnd.find(e => e.date >= startVisit.date);
+      if (!nextEnd) return;
+
+      const transitDays = daysDiff(startVisit.date, nextEnd.date);
+
+      let bestTargetDate = null;
+      let bestDiff = Infinity;
+      targetEndDates.forEach(td => {
+        const diff = daysDiff(nextEnd.date, td.date);
+        const isBetter = bestTargetDate === null ||
+          (diff >= 0 && bestDiff < 0) ||
+          (diff >= 0 && bestDiff >= 0 && diff < bestDiff) ||
+          (diff < 0 && bestDiff < 0 && Math.abs(diff) < Math.abs(bestDiff));
+        if (isBetter) {
+          bestDiff = diff;
+          bestTargetDate = td;
+        }
+      });
+
+      if (!bestTargetDate) return;
+
+      transferAllRoutes.push({
+        vessel: vCode,
+        eName: vInfo.eName,
+        cName: vInfo.cName,
+        line: vInfo.line,
+        vslType: vInfo.vslType,
+        startDate: startVisit.dateStr,
+        startDateObj: startVisit.date,
+        endDate: nextEnd.dateStr,
+        endDateObj: nextEnd.date,
+        targetDate: bestTargetDate.dateStr,
+        targetDateObj: bestTargetDate.date,
+        diffDays: bestDiff,
+        transitDays: transitDays
+      });
+    });
+  });
+
+  if (transferAllRoutes.length === 0) {
+    hideAllResults();
+    document.getElementById('noData').classList.remove('hidden');
+    document.getElementById('noDataMsg').textContent = `找不到同時經過「${startPort}」和「${endPort}」的轉運船`;
+    return;
+  }
+
+  transferAllRoutes.sort((a, b) => {
+    const tCmp = a.targetDate.localeCompare(b.targetDate);
+    if (tCmp !== 0) return tCmp;
+    const aOnTime = a.diffDays >= 0 ? 0 : 1;
+    const bOnTime = b.diffDays >= 0 ? 0 : 1;
+    if (aOnTime !== bOnTime) return aOnTime - bOnTime;
+    return Math.abs(a.diffDays) - Math.abs(b.diffDays);
+  });
+
+  document.getElementById('transferThStart').textContent = `起始碼頭 ${startPort} 到港日`;
+  document.getElementById('transferThEnd').textContent = `終點碼頭 ${endPort} 到港日`;
+  document.getElementById('transferThTarget').textContent = `目標船 ${endPort} 到港日`;
+
+  const targetName = `${targetInfo.eName} (${targetInfo.cName})`;
+  document.getElementById('transferResultTitle').textContent = `備品轉運方案`;
+  document.getElementById('transferResultMeta').textContent =
+    `${startPort} → ${endPort}　|　${transferAllRoutes.length} 條路線`;
+
+  const targetDatesDisplay = targetEndDates.slice(0, 5).map(d => formatDate(d.dateStr)).join('、');
+  document.getElementById('transferTargetInfo').innerHTML = `
+    <div class="info-item"><label>目標船</label><span>${targetInfo.eName}</span></div>
+    <div class="info-item"><label>中文船名</label><span>${targetInfo.cName}</span></div>
+    <div class="info-item"><label>船舶代碼</label><span>${targetCode}</span></div>
+    <div class="info-item"><label>航線</label><span>${targetInfo.line}</span></div>
+    <div class="info-item"><label>船型</label><span>${targetInfo.vslType}</span></div>
+    <div class="info-item"><label>終點碼頭到港日</label><span style="font-size:12px">${targetDatesDisplay}${targetEndDates.length > 5 ? '...' : ''}</span></div>
+  `;
+
+  const uniqueTransferVessels = new Set(transferAllRoutes.map(r => r.vessel)).size;
+  const onTimeCount = transferAllRoutes.filter(r => r.diffDays >= 0).length;
+  document.getElementById('transferStatsBar').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${transferAllRoutes.length}</div><div class="stat-label">轉運路線</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#0d9488">${uniqueTransferVessels}</div><div class="stat-label">可用轉運船</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#059669">${onTimeCount}</div><div class="stat-label">準時/提前</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:#dc2626">${transferAllRoutes.length - onTimeCount}</div><div class="stat-label">遲到</div></div>
+  `;
+
+  hideAllResults();
+  document.getElementById('transferResultsSection').classList.remove('hidden');
+  applyTransferFilter();
+}
+
+function applyTransferFilter() {
+  const sortVal = document.getElementById('transferSortOrder').value;
+  const timingVal = document.getElementById('transferTimingFilter').value;
+
+  transferCurrentRoutes = [...transferAllRoutes];
+
+  if (timingVal === 'ontime') {
+    transferCurrentRoutes = transferCurrentRoutes.filter(r => r.diffDays >= 0);
+  } else if (timingVal === 'late') {
+    transferCurrentRoutes = transferCurrentRoutes.filter(r => r.diffDays < 0);
+  }
+
+  if (sortVal === 'match') {
+    transferCurrentRoutes.sort((a, b) => {
+      const tCmp = a.targetDate.localeCompare(b.targetDate);
+      if (tCmp !== 0) return tCmp;
+      const aOnTime = a.diffDays >= 0 ? 0 : 1;
+      const bOnTime = b.diffDays >= 0 ? 0 : 1;
+      if (aOnTime !== bOnTime) return aOnTime - bOnTime;
+      return Math.abs(a.diffDays) - Math.abs(b.diffDays);
+    });
+  } else if (sortVal === 'early') {
+    transferCurrentRoutes.sort((a, b) => a.startDate.localeCompare(b.startDate));
+  } else if (sortVal === 'short') {
+    transferCurrentRoutes.sort((a, b) => a.transitDays - b.transitDays);
+  }
+
+  renderTransferTable(transferCurrentRoutes);
+}
+
+function renderTransferTable(data) {
+  const tbody = document.getElementById('transferTableBody');
+  if (data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="no-data">無符合條件的轉運路線</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((r, i) => {
+    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other';
+    const bestTag = '';
+    const diffLabel = r.diffDays > 0 ? `提前 ${r.diffDays} 天` : r.diffDays === 0 ? '同日到達' : `遲到 ${Math.abs(r.diffDays)} 天`;
+    const diffClass = r.diffDays >= 0 ? 'good' : (Math.abs(r.diffDays) <= 3 ? 'ok' : 'late');
+    return `
+    <tr${i === 0 ? ' style="background:#f0fdfa"' : ''}>
+      <td style="text-align:center"><span class="transfer-rank ${rankClass}">${i + 1}</span></td>
+      <td>${r.vessel}${bestTag}</td>
+      <td>${r.eName}</td>
+      <td>${r.cName}</td>
+      <td>${r.line}</td>
+      <td class="date-cell">${formatDate(r.startDate)} (${getWeekday(r.startDate)})</td>
+      <td class="date-cell">${formatDate(r.endDate)} (${getWeekday(r.endDate)})</td>
+      <td class="date-cell">${formatDate(r.targetDate)} (${getWeekday(r.targetDate)})</td>
+      <td><span class="transfer-days ${diffClass}">${diffLabel}</span></td>
+      <td style="text-align:center;font-weight:600">${r.transitDays} 天</td>
+    </tr>`;
+  }).join('');
+}
+
+function clearTransferSearch() {
+  document.getElementById('transferStartPort').value = '';
+  document.getElementById('transferEndPort').value = '';
+  transferVesselInput.value = '';
+  transferTargetVesselCode = '';
+  document.getElementById('transferResultsSection').classList.add('hidden');
+  transferAllRoutes = [];
+  transferCurrentRoutes = [];
+}
+
+function exportTransferCSV() {
+  if (transferCurrentRoutes.length === 0) return;
+  const bom = '\uFEFF';
+  let csv = bom + '排名,轉運船代碼,英文短名,中文船名,航線,船型,起始碼頭到港日,終點碼頭到港日,目標船到港日,提前/遲到天數,轉運天數\n';
+  transferCurrentRoutes.forEach((r, i) => {
+    const diffLabel = r.diffDays > 0 ? `提前${r.diffDays}天` : r.diffDays === 0 ? '同日' : `遲到${Math.abs(r.diffDays)}天`;
+    csv += `${i + 1},${r.vessel},${r.eName},${r.cName},${r.line},${r.vslType},${formatDate(r.startDate)},${formatDate(r.endDate)},${formatDate(r.targetDate)},${diffLabel},${r.transitDays}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const startPort = document.getElementById('transferStartPort').value;
+  const endPort = document.getElementById('transferEndPort').value;
+  a.download = `備品轉運查詢_${startPort}_to_${endPort}.csv`;
   a.click();
 }
 
